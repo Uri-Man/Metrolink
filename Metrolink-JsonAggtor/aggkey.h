@@ -11,7 +11,7 @@ Represents a key composed of multiple strings
 typedef vector<string> AggKey;
 
 /*
-Add a hash function for AggKey to std namespace
+Add a hash struct for AggKey to std namespace
 so it can be used with map objects
 */
 namespace std {
@@ -19,6 +19,8 @@ namespace std {
 	template <>
 	struct hash<AggKey>
 	{
+
+		// Method called to compute hash
 		std::size_t operator()(const AggKey& k) const
 		{
 			using std::size_t;

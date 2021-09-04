@@ -21,21 +21,18 @@
     <ClCompile Include="aggregation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="base64.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="counter.cpp">
+    <ClCompile Include="jsonaggregator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="aggkey.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="aggregation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="base64.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="counter.h">
+    <ClInclude Include="jsonaggregator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

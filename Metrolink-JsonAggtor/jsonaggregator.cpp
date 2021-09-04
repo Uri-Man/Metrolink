@@ -1,14 +1,17 @@
 #include "jsonaggregator.h"
 
-int JsonAggregator::loadConfig(string configFile)
+int JsonAggregator::loadConfig(const string configFile)
 {
 
 	rapidjson::Document config;
-	if (!readJson(configFile.c_str(), config)) {
+	if (readJson(configFile.c_str(), config)) {
 		std::cout << "[!] Config load failed" << std::endl;
 		return 1;
 	}
 
+	/*
+	Validate config
+	*/
 	if (!config.HasMember(GROUPBY_COL)){
 		std::cout << "[!] Config Does not have required key - " << GROUPBY_COL << std::endl;
 		return 2;
@@ -21,6 +24,9 @@ int JsonAggregator::loadConfig(string configFile)
 		return 3;
 	}
 
+	/*
+	Store groupby columns
+	*/
 	for (const auto& col : groupbyCol.GetArray()) {
 		if (!col.IsString()) {
 			std::cout << "[!] All array elements should be string - " << GROUPBY_COL << std::endl;
@@ -32,90 +38,91 @@ int JsonAggregator::loadConfig(string configFile)
 	return 0;
 }
 
-int JsonAggregator::addJson(string jsonFile)
+int JsonAggregator::addJson(const string jsonFile)
 {
 
 	rapidjson::Document json;
-	if (!readJson(jsonFile.c_str(), json))
-		return 1;
 
-	if (!json.HasMember(ON_COL)) {
-		std::cout << "[*] Does not have required key - " << ON_COL << std::endl;
+	if (readJson(jsonFile.c_str(), json))
+		return 1;
+	
+	/*
+	Validate ON column and get value
+	*/
+	if (!json.HasMember(columnToSum.c_str())) {
+		std::cout << "[*] JSON fail - '" << jsonFile << "' Does not have required key - " << columnToSum.c_str() << std::endl;
 		return 2;
 	}
 
-	auto& onCol = json[ON_COL];
+	auto& onCol = json[columnToSum.c_str()];
 
 	if (!onCol.IsFloat() && !onCol.IsInt()) {
-		std::cout << "[!] Config column must be an string - " << ON_COL << std::endl;
+		std::cout << "[*] JSON fail - '" << jsonFile << "' Property must be float - " << columnToSum.c_str() << std::endl;
 		return 3;
 	}
 
+
+	/*
+	Validate groupby columns and them to Agg Key
+	*/
 	AggKey aggKey;
 
 	for (const auto& col : groupby) {
 		auto& colValue = json[col.c_str()];
 		if (!colValue.IsString()) {
-			std::cout << "[!] All array elements should be string - " << GROUPBY_COL << std::endl;
+			std::cout << "[*] JSON fail - '" << jsonFile << "' Property should be string - " << col << std::endl;
 			return 4;
 		}
 		aggKey.push_back(colValue.GetString());
 	}
 
-	this->agg.add(aggKey, onCol.GetFloat());
+	/*
+	Update aggregation
+	*/
+	this->agg.update(aggKey, onCol.GetFloat());
 
 	return 0;
 }
 
-int JsonAggregator::writeResults(string outFile)
+int JsonAggregator::writeResults(const string outFile)
 {
-	using namespace rapidjson;
-
-	Document d;
-	d.SetObject();
-
-	rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
-
-	size_t sz = allocator.Size();
-
-	d.AddMember("version", "a", allocator);
-	d.AddMember("testId", 2, allocator);
-	d.AddMember("group", 3, allocator);
-	d.AddMember("order", 4, allocator);
+	/*
+	File init
+	*/
+	std::ofstream filestream(outFile);
+	filestream << "[";
 	
 
-	Value tests(kArrayType);
-	Value obj(kObjectType);
-	Value val(kObjectType);
+	/*
+	Parse and write each aggreagtion entry
+	*/
+	bool firstEntry = true;
+	for (const auto& entry : this->agg.getEntries()) {
 
-	obj.AddMember("id", 1, allocator);
+		if (!firstEntry)
+			filestream << ",\n";
+		else
+			firstEntry = false;
 
-	string description = "a description";
-	val.SetString(description.c_str(), static_cast<SizeType>(description.length()), allocator);
-	obj.AddMember("description", val, allocator);
+		filestream << this->parseEntry(entry.first, entry.second);
+	}
 
-	string help = "some help";
-	val.SetString(help.c_str(), static_cast<SizeType>(help.length()), allocator);
-	obj.AddMember("help", val, allocator);
+	/*
+	File finish
+	*/
+	filestream << "]";
+	filestream.close();
 
-	string workgroup = "a workgroup";
-	val.SetString(workgroup.c_str(), static_cast<SizeType>(workgroup.length()), allocator);
-	obj.AddMember("workgroup", val, allocator);
-
-	val.SetBool(true);
-	obj.AddMember("online", val, allocator);
-
-	tests.PushBack(obj, allocator);
-	d.AddMember("tests", tests, allocator);
-
-	// Convert JSON document to string
-	rapidjson::StringBuffer strbuf;
+	return 0;
 }
 
-int JsonAggregator::readJson(string path, rapidjson::Document & json, vector<string> requiredMembers)
+int JsonAggregator::readJson(const string path, rapidjson::Document& json)
 {
 	using namespace rapidjson;
 
+	/*
+	Handle to file
+	*/
 	FILE* fp = fopen(path.c_str(), "rb");
 
 	if (NULL == fp) {
@@ -123,15 +130,55 @@ int JsonAggregator::readJson(string path, rapidjson::Document & json, vector<str
 		return 1;
 	}
 
+	/*
+	Read and parse
+	*/
 	char readBuffer[1024];
 	FileReadStream is(fp, readBuffer, sizeof(readBuffer));
 
 	json.ParseStream(is);
 
-	if (json.HasParseError()) {
+	/*
+	Validate
+	*/
+	if (json.HasParseError() || !json.IsObject()) {
 		std::cout << "[*] Could not parse JSON file - " + path << std::endl;
 		return 2;
 	}
-
+	
 	return 0;
+}
+
+string JsonAggregator::parseEntry(const AggKey& aggKey, float aggResult)
+{
+	using namespace rapidjson;
+
+	// Init JSON object and allocator
+	Document d;
+	d.SetObject();
+	rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
+	allocator.Clear();
+
+	// Add result
+	d.AddMember(
+		Value(columnToSum.c_str(), allocator).Move(), // Result name
+		aggResult, // Result value
+		allocator);
+
+	// Add key (groupby columns)
+	for (int i = 0; i < aggKey.size(); i++)
+
+		d.AddMember(
+			Value(this->groupby[i].c_str(), allocator).Move(), // Column name
+			Value(aggKey[i].c_str(), allocator).Move(),  // Column value
+			allocator);
+
+	// Convert JSON document to string
+	rapidjson::StringBuffer buffer;
+	buffer.Clear();
+	rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+	d.Accept(writer);
+	
+	return string(buffer.GetString(), buffer.GetSize());
+
 }

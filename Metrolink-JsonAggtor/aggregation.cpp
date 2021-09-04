@@ -1,22 +1,28 @@
 #include "aggregation.h"
 
-void ArithmeticAggregation::add(AggKey key, float value)
+void ArithmeticAggregation::update(AggKey key, float value)
 {
-	auto prev = agg.find(key);
+	// Try to find relevant entry
+	auto prev = entries.find(key);
 
-	// Update aggregation
-	if (prev != agg.end())
+	// Update entry
+	if (prev != entries.end())
 		prev->second = aggFunc(prev->second, value);
 
-	// Init aggregation
+	// Init entry
 	else
-		agg[key] = aggFunc(defaltValue, value);
+		entries[key] = aggFunc(defaltValue, value);
+}
+
+const unordered_map<AggKey, float>& ArithmeticAggregation::getEntries()
+{
+	return entries;
 }
 
 float SumAggregation::aggFunc(float prev, float value)
 {
 	/*
-	Sum new value with previous sum
+	Add new value to previous sum
 	*/
 	return prev + value;
 }

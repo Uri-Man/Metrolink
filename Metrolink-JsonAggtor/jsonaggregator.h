@@ -3,25 +3,55 @@
 #include "rapidjson/document.h"
 #include "rapidjson/filereadstream.h"
 #include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
 
 #include <iostream>
+#include <fstream>
 #include <cstdio>
-#define RAPIDJSON_HAS_STDSTRING 1;
+
+/*
+Config grouby column name
+*/
 #define GROUPBY_COL "groupBy"
-#define ON_COL "moneySpent"
 
 class JsonAggregator {
+	/*
+	Aggregates JSON logs to get sum of column
+	*/
 
 public:
-	JsonAggregator();
-	int loadConfig(string configFile);
-	int addJson(string jsonFile);
-	int writeResults(string outFile);
+	JsonAggregator(const string columnToSum) : columnToSum(columnToSum) {};
+
+	/*
+	Loads a JSON config file containing the Groupby details
+	*/
+	int loadConfig(const string configFile);
+
+	/*
+	Trys to parse a JSON file and updates aggregation
+	*/
+	int addJson(const string jsonFile);
+
+	/*
+	Writes aggregation results to file
+	*/
+	int writeResults(const string outFile);
 
 private:
-	int readJson(string path, rapidjson::Document& json, vector<string> requiredMembers);
+	const string columnToSum;
+
+	// Trys to read and parse a JSON file based on groupby columns
+	// @param path Path to file
+	// @param json Json object to fill
+	int readJson(const string path, rapidjson::Document& json);
+
+	// Parses aggregation entry to JSON string
+	string parseEntry(const AggKey& aggKey, float aggResult);
+
+	// Groupby columns/keys
 	vector<string> groupby;
-	string on;
+
+	// Aggregation object
 	SumAggregation agg;
 	
 };
